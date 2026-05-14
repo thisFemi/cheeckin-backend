@@ -30,7 +30,7 @@ class CreateLeaveTypeRequest extends FormRequest
                 Rule::unique('leave_types')->where('organization_id', $this->user()->organization_id),
             ],
             'description'        => ['nullable', 'string', 'max:500'],
-            'days_per_year'      => ['required', 'integer', 'min:1', 'max:365'],
+            'days_per_year'      => ['nullable', 'integer', 'min:1', 'max:365'],
             'is_paid'            => ['boolean'],
             'requires_document'  => ['boolean'],
         ];

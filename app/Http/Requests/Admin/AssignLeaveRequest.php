@@ -30,7 +30,7 @@ class AssignLeaveRequest extends FormRequest
                 Rule::exists('leave_types', 'id')
                     ->where('organization_id', $this->user()->organization_id),
             ],
-            'leave_types.*.entitled_days' => ['required', 'integer', 'min:1', 'max:365'],
+          
         
         ];
     }

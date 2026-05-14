@@ -201,8 +201,13 @@ class StaffController extends Controller
 
 public function assignLeave(AssignLeaveRequest $request, int $id): JsonResponse
 {
+        $user = $request->user();
+        if( !$user->canDo('manage_users')){
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
     $staff = User::where('id', $id)
-        ->where('organization_id', $request->user()->organization_id)
+        ->where('organization_id', $user->organization_id)
         ->where('user_type', 'employee')
         ->firstOrFail();
 
@@ -213,7 +218,7 @@ public function assignLeave(AssignLeaveRequest $request, int $id): JsonResponse
     $leaveTypeIds = collect($request->leave_types)->pluck('leave_type_id');
 
     $leaveTypes = LeaveType::whereIn('id', $leaveTypeIds)
-        ->where('organization_id', $request->user()->organization_id)
+        ->where('organization_id',  $user->organization_id)
         ->get()
         ->keyBy('id'); // key by ID so we can access them directly
 
@@ -222,6 +227,8 @@ public function assignLeave(AssignLeaveRequest $request, int $id): JsonResponse
 
         // Skip silently if leave type not found or belongs to another org
         if (!$leaveType) continue;
+         $entitledDays = $leaveType->days_per_year ?? 0;
+
 
         UserLeaveEntitlement::updateOrCreate(
             [
@@ -230,7 +237,7 @@ public function assignLeave(AssignLeaveRequest $request, int $id): JsonResponse
                 'year'          => $year,
             ],
             [
-                'entitled_days' => $entry['entitled_days'],
+                'entitled_days' => $entitledDays,
             ]
         );
 
@@ -238,7 +245,7 @@ public function assignLeave(AssignLeaveRequest $request, int $id): JsonResponse
             'leave_type_id'   => $leaveType->id,
             'leave_type_name' => $leaveType->name,
             'leave_type_code' => $leaveType->code,
-            'entitled_days'   => $entry['entitled_days'],
+            'entitled_days'   => $entitledDays,
         ];
     }
 
@@ -250,9 +257,11 @@ public function assignLeave(AssignLeaveRequest $request, int $id): JsonResponse
 
     return response()->json([
         'message'  => 'Leave entitlements assigned.',
-        'staff_id' => $staff->id,
-        'year'     => $year,
-        'assigned' => $summary,
+        'data' => [
+            'staff_id' => $staff->id,
+            'year'     => $year,
+            'assigned' => $summary,
+        ],
     ]);
 }
 
