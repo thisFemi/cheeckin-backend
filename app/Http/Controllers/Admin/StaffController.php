@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AssignLeaveRequest;
 use App\Http\Requests\Admin\AssignPolicyRequest;
 use App\Http\Requests\Admin\CreateStaffRequest;
+use App\Http\Requests\Admin\DeassignLeaveRequest;
 use App\Http\Requests\Admin\UpdateStaffRequest;
 use App\Http\Resources\AttendancePolicyResource;
 use App\Http\Resources\UserResource;
@@ -197,6 +198,33 @@ class StaffController extends Controller
             'policy'  => new AttendancePolicyResource($policy),
         ]);
     }
+    public function deassignPolicy(Request $request, int $id): JsonResponse
+{
+        $user = $request->user();
+        if( !$user->canDo('manage_users')){
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+    $staff = User::where('id', $id)
+        ->where('organization_id',  $user->organization_id)
+        ->where('user_type', 'employee')
+        ->firstOrFail();
+
+    $policy = UserAttendancePolicy::where('user_id', $staff->id)->first();
+
+    if (!$policy) {
+        return response()->json([
+            'message' => 'This staff member has no attendance policy assigned.',
+        ], 422);
+    }
+
+    $policyName = $policy->attendancePolicy->name;
+    $policy->delete();
+
+    return response()->json([
+        'message' => "Attendance policy '{$policyName}' removed from {$staff->first_name} {$staff->last_name}.",
+    ]);
+}
+
 
 
 public function assignLeave(AssignLeaveRequest $request, int $id): JsonResponse
@@ -263,6 +291,59 @@ public function assignLeave(AssignLeaveRequest $request, int $id): JsonResponse
             'assigned' => $summary,
         ],
     ]);
+}
+public function deassignLeave(DeassignLeaveRequest $request, int $id): JsonResponse
+{
+        $user = $request->user();
+        if( !$user->canDo('manage_users')){
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+    $staff = User::where('id', $id)
+        ->where('organization_id',  $user->organization_id)
+        ->where('user_type', 'employee')
+        ->firstOrFail();
+
+    $year         = $request->integer('year', now()->year);
+    $leaveTypeIds = $request->leave_type_ids;
+
+    // Load matching entitlements for this staff in one query
+    $entitlements = UserLeaveEntitlement::where('user_id', $staff->id)
+        ->where('year', $year)
+        ->whereIn('leave_type_id', $leaveTypeIds)
+        ->get();
+
+    if ($entitlements->isEmpty()) {
+        return response()->json([
+            'message' => 'No matching leave entitlements found for this staff member.',
+        ], 422);
+    }
+
+    // Load leave type names for the response summary
+    $leaveTypes = LeaveType::whereIn('id', $entitlements->pluck('leave_type_id'))
+        ->get()
+        ->keyBy('id');
+
+    $removed = [];
+
+    foreach ($entitlements as $entitlement) {
+        $leaveType = $leaveTypes->get($entitlement->leave_type_id);
+        $removed[] = [
+            'leave_type_id'   => $entitlement->leave_type_id,
+            'leave_type_name' => $leaveType?->name,
+            'leave_type_code' => $leaveType?->code,
+            'year'            => $year,
+        ];
+        $entitlement->delete();
+    }
+
+    return response()->json([
+        'message'  => 'Leave entitlements removed.',
+        "data" => [
+        'staff_id' => $staff->id,
+        'year'     => $year,
+        'removed'  => $removed,
+    ]]);
 }
 
 
