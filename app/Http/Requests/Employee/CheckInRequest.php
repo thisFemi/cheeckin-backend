@@ -12,7 +12,7 @@ class CheckInRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -23,7 +23,20 @@ class CheckInRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
-        ];
+          'latitude'   => ['required', 'numeric', 'between:-90,90'],
+            'longitude'  => ['required', 'numeric', 'between:-180,180'],
+            'face_image' => [
+                // Required only if policy demands it — enforced in controller
+                // since we need the loaded policy to decide. Here: conditionally required.
+                'nullable', 'string',
+                function ($attribute, $value, $fail) {
+                    if ($value !== null) {
+                        $data = preg_replace('/^data:image\/\w+;base64,/', '', $value);
+                        if (base64_decode($data, true) === false) {
+                            $fail('The face image must be a valid base64-encoded image.');
+                        }
+                    }
+                },
+        ]];
     }
 }

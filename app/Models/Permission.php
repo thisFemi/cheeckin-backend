@@ -11,6 +11,7 @@ class Permission extends Model
         'organization_id',
         'name',
         'slug',
+        'group'
     ];
 
 protected $hidden = ['pivot'];

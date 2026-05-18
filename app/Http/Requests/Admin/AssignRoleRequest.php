@@ -1,11 +1,13 @@
 <?php
 
-namespace App\Http\Requests\Owner;
+namespace App\Http\Requests\Admin;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use PHPUnit\Logging\JUnit\TestRunnerExecutionFinishedSubscriber;
 
-class CreateRoleRequest extends FormRequest
+class AssignRoleRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -23,8 +25,11 @@ class CreateRoleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name'        => ['required', 'string', 'max:100'],
-            'permissions' => ['nullable', 'array'],
+              'role_id' => [
+                'required', 'integer',
+                Rule::exists('roles', 'id')
+                    ->where('organization_id', $this->user()->organization_id),
+          ]
         ];
     }
 }

@@ -34,4 +34,12 @@ class Role extends Model
     {
         return $this->belongsToMany(Permission::class, 'role_permission')->withPivot('allowed');
     }
+
+     public function hasPermission(string $slug): bool
+    {
+        return $this->permissions
+            ->where('slug', $slug)
+            ->where('pivot.allowed', true)
+            ->isNotEmpty();
+    }
 }

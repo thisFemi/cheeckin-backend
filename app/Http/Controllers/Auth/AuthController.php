@@ -64,37 +64,7 @@ public function registerOwner(RegisterOwnerRequest $request):JsonResponse{
 }
 
 
-public function registerEmployee(RegisterEmployeeRequest $request):JsonResponse{
-    $organization=Organization::where('org_code',$request->org_code)
-    ->where('is_active',true)
-    ->firstOrFail();
 
-    $employee = User::create([
-        'organization_id'=>$organization->id,
-        'first_name'    =>$request->first_name,
-        'last_name'     =>$request->last_name,
-        'email'         =>$request->email,
-        'password'      =>Hash::make($request->password),
-        'phone'         =>$request->phone,
-        'user_type'     =>'employee',
-        'employee_id'  => $request->employee_id,
-        'department'   => $request->department,
-        'position'     => $request->position,
-        'joined_date'  => $request->joined_date,
-        'face_template'  => null, 
-
-    ]);  
-    $token = $employee->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'message'             => 'Employee registration successful',
-            'data'=>[
-            'user'                => new UserResource($employee->load('organization')),
-            'token'               => $token,
-            'requires_face_setup' => true, // Frontend should redirect to face setup screen
-            ]
-        ], 201);
-    }
 
      public function login(LoginRequest $request): JsonResponse
     {
@@ -121,11 +91,19 @@ public function registerEmployee(RegisterEmployeeRequest $request):JsonResponse{
         // Only employees need face setup; owners and admins are exempt
         $requiresFaceSetup = $user->isEmployee() && is_null($user->face_template);
 
+         $requiresPasswordReset = (bool) $user->require_password_reset;
+        if ($requiresPasswordReset) {
+            return response()->json([
+                'message' => 'Password reset required. Please change your password before proceeding.',
+            ], 403);
+        }
         return response()->json([
             'message' => 'Login successful',
                 'data'=>[
             'user'                => new UserResource($user),
             'token'               => $token,
+            'permissions'         => $user->getPermissions(),
+   
             'requires_face_setup' => $requiresFaceSetup,
             // Frontend flow:
             // if requires_face_setup === true → navigate to /face-setup screen
@@ -177,11 +155,15 @@ public function registerEmployee(RegisterEmployeeRequest $request):JsonResponse{
 
     // Update user password
     $user = User::where('email', $request->email)->first();
-    $user->password = Hash::make($request->password);
-    $user->save();
-
+    
+  $user->update([
+        'password'               => Hash::make($request->password),
+        'require_password_reset' => false,
+    ]);
     // Delete used code (important)
     $reset->delete();
+    $user->tokens()->where('id', '!=', $request->user()->currentAccessToken()->id)->delete();
+
 
     return response()->json([
         'message' => 'Password reset successful, you can now log in with your new password'

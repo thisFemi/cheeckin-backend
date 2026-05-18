@@ -6,6 +6,7 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Support\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -31,7 +32,7 @@ class User extends Authenticatable
 protected $fillable = [
        'organization_id', 'role_id', 'first_name', 'last_name', 'email',
         'password', 'phone', 'avatar', 'face_template', 'requires_face_setup', 'user_type',
-        'employment_status', 'employee_id', 'department', 'position', 'joined_date',
+        'employment_status', 'employee_id', 'department', 'position', 'joined_date', 'require_password_reset',
     ];
 
 protected $hidden = ['password', 'remember_token', 'face_template'];
@@ -40,7 +41,11 @@ protected $hidden = ['password', 'remember_token', 'face_template'];
         'email_verified_at' => 'datetime',
         'joined_date'       => 'date',
         'password'          => 'hashed',
+        'require_password_reset' => 'boolean',
     ];
+    protected ?Collection $cachedPermissions = null;
+
+
 
 
     public function organization(): BelongsTo{
@@ -109,7 +114,41 @@ public function canDo(string $permission): bool
         return true;
     }
 
+
+    // No role assigned — no permissions
+    if (!$this->role_id) {
+        return false;
+    }
+
+     if ($this->cachedPermissions === null) {
+        $this->cachedPermissions = $this->role
+            ->permissions()
+            ->wherePivot('allowed', true)
+            ->get();
+    }
+
     // Otherwise check permission
-    return $this->hasPermission($permission);
+      return $this->cachedPermissions
+        ->where('slug', $permission)
+        ->isNotEmpty();
 }
+
+
+public function getPermissions(): array
+{
+    if ($this->isOwner()) {
+        return \App\Enums\Permission::all();
+    }
+
+    if ($this->isEmployee() || !$this->role_id) {
+        return [];
+    }
+
+    return $this->role
+        ->permissions()
+        ->wherePivot('allowed', true)
+        ->pluck('slug')
+        ->toArray();
+}
+
 }

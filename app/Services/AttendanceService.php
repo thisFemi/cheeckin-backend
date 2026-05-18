@@ -1,4 +1,5 @@
 <?php
+namespace App\Services;
 
 use App\Models\AttendancePolicy;
 use Carbon\Carbon;
@@ -6,19 +7,26 @@ use Carbon\Carbon;
 // app/Services/AttendanceService.php
 class AttendanceService
 {
-    public function computeStatus(
-        AttendancePolicy $policy,
-        Carbon $checkInAt
-    ): string {
-        $policyStart = Carbon::parse($checkInAt->toDateString() . ' ' . $policy->work_start_time);
-        $lateBy      = $checkInAt->diffInMinutes($policyStart, false); // positive = late
+        public function computeStatus(
+    AttendancePolicy $policy,
+    Carbon $checkInAt
+): string {
+    $policyStart = Carbon::parse($checkInAt->toDateString() . ' ' . $policy->work_start_time);
 
-        if ($lateBy > $policy->late_threshold_minutes) {
-            return 'late';
-        }
-
+    // If employee checked in BEFORE work starts — always present
+    if ($checkInAt->lessThanOrEqualTo($policyStart)) {
         return 'present';
     }
+
+    // How many minutes AFTER the policy start time did they check in
+    $minutesLate = $policyStart->diffInMinutes($checkInAt); // always positive
+
+    if ($minutesLate > $policy->late_threshold_minutes) {
+        return 'late';
+    }
+
+    return 'present';
+}
 
     public function computeWorkingMinutes(Carbon $checkIn, Carbon $checkOut): int
     {

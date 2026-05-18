@@ -29,6 +29,7 @@ public function up(): void
         $table->string('department')->nullable();
         $table->string('position')->nullable();
         $table->date('joined_date')->nullable();
+        $table->boolean('require_password_reset')->default(false);
         $table->timestamp('email_verified_at')->nullable();
         $table->rememberToken();
         $table->timestamps();

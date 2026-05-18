@@ -11,6 +11,7 @@ use App\Http\Requests\Admin\UpdateStaffRequest;
 use App\Http\Resources\AttendancePolicyResource;
 use App\Http\Resources\UserResource;
 use App\Models\AttendancePolicy;
+use App\Models\Role;
 use App\Models\User;
 use App\Models\UserAttendancePolicy;
 use App\Models\Organization;
@@ -83,6 +84,7 @@ class StaffController extends Controller
             'face_template'     => null,    // Always null — set by employee on first login
             'employment_status' => 'active',
             'requires_face_setup' => $request->requires_face_setup??true, 
+            'require_password_reset' =>true,
             
         ]);
 
@@ -173,7 +175,36 @@ class StaffController extends Controller
 
         return response()->json(['message' => 'Staff account deactivated.']);
     }
+    public function assignRole(Request $request, int $id): JsonResponse{
+   $user = $request->user();
+       if (!$user->canDo('manage_staff')) {
+        return response()->json(['message' => 'Forbidden. You do not have permission to manage staff.'], 403);
+    }
+         $staff = User::where('id', $id)
+            ->where('organization_id', $user->organization_id)
+            ->where('user_type', 'employee')
+            ->firstOrFail();
+        
+    $previousRole = $staff->role?->name;
 
+    $staff->update(['role_id' => $request->role_id]);
+
+    $newRole = Role::with('permissions')->find($request->role_id);
+   
+
+   return response()->json([
+        'message'       => "Role assigned to {$staff->first_name} {$staff->last_name}.",
+        'data'=>[
+        'previous_role' => $previousRole,
+        'new_role'      => [
+            'id'          => $newRole->id,
+            'name'        => $newRole->name,
+            'permissions' => $newRole->permissions
+                                ->where('pivot.allowed', true)
+                                ->pluck('slug'),
+        ],
+    ]]);
+}
      public function assignPolicy(AssignPolicyRequest $request, int $id): JsonResponse
     {
               $user = $request->user();
@@ -185,7 +216,20 @@ class StaffController extends Controller
             ->where('organization_id', $user->organization_id)
             ->where('user_type', 'employee')
             ->firstOrFail();
+            
+        $existingAssignment = UserAttendancePolicy::where('user_id', $staff->id)->first();
+  if ($existingAssignment) {
+        $currentPolicy = $existingAssignment->attendancePolicy;
 
+        return response()->json([
+            'message'        => "This staff member is already assigned to a policy. Please deassign them first before assigning a new one.",
+            'current_policy' => [
+                'id'   => $currentPolicy->id,
+                'name' => $currentPolicy->name,
+            ],
+            //'hint' => "Call .../api/admin/staff/{$staff->id}/deassign-policy to remove the current policy.",
+        ], 422);
+    }
         UserAttendancePolicy::updateOrCreate(
             ['user_id' => $staff->id],
             ['attendance_policy_id' => $request->attendance_policy_id]
@@ -198,153 +242,154 @@ class StaffController extends Controller
             'policy'  => new AttendancePolicyResource($policy),
         ]);
     }
-    public function deassignPolicy(Request $request, int $id): JsonResponse
-{
-        $user = $request->user();
-        if( !$user->canDo('manage_users')){
-            return response()->json(['message' => 'Forbidden'], 403);
+        public function deassignPolicy(Request $request, int $id): JsonResponse
+    {
+            $user = $request->user();
+            if( !$user->canDo('manage_users')){
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
+        $staff = User::where('id', $id)
+            ->where('organization_id',  $user->organization_id)
+            ->where('user_type', 'employee')
+            ->firstOrFail();
+
+        $policy = UserAttendancePolicy::where('user_id', $staff->id)->first();
+
+        if (!$policy) {
+            return response()->json([
+                'message' => 'This staff member has no attendance policy assigned.',
+            ], 422);
         }
-    $staff = User::where('id', $id)
-        ->where('organization_id',  $user->organization_id)
-        ->where('user_type', 'employee')
-        ->firstOrFail();
 
-    $policy = UserAttendancePolicy::where('user_id', $staff->id)->first();
+        $policyName = $policy->attendancePolicy->name;
+        $policy->delete();
 
-    if (!$policy) {
         return response()->json([
-            'message' => 'This staff member has no attendance policy assigned.',
-        ], 422);
+            'message' => "Attendance policy '{$policyName}' removed from {$staff->first_name} {$staff->last_name}.",
+        ]);
     }
 
-    $policyName = $policy->attendancePolicy->name;
-    $policy->delete();
-
-    return response()->json([
-        'message' => "Attendance policy '{$policyName}' removed from {$staff->first_name} {$staff->last_name}.",
-    ]);
-}
 
 
+    public function assignLeave(AssignLeaveRequest $request, int $id): JsonResponse
+    {
+            $user = $request->user();
+            if( !$user->canDo('manage_users')){
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
 
-public function assignLeave(AssignLeaveRequest $request, int $id): JsonResponse
-{
-        $user = $request->user();
-        if( !$user->canDo('manage_users')){
-            return response()->json(['message' => 'Forbidden'], 403);
+        $staff = User::where('id', $id)
+            ->where('organization_id', $user->organization_id)
+            ->where('user_type', 'employee')
+            ->firstOrFail();
+
+        $year    = now()->year;
+        $summary = [];
+
+        // Load all requested leave types in one query instead of one per loop
+        $leaveTypeIds = collect($request->leave_types)->pluck('leave_type_id');
+
+        $leaveTypes = LeaveType::whereIn('id', $leaveTypeIds)
+            ->where('organization_id',  $user->organization_id)
+            ->get()
+            ->keyBy('id'); // key by ID so we can access them directly
+
+        foreach ($request->leave_types as $entry) {
+            $leaveType = $leaveTypes->get($entry['leave_type_id']);
+
+            // Skip silently if leave type not found or belongs to another org
+            if (!$leaveType) continue;
+            $entitledDays = $leaveType->days_per_year ?? 0;
+
+
+            UserLeaveEntitlement::updateOrCreate(
+                [
+                    'user_id'       => $staff->id,
+                    'leave_type_id' => $leaveType->id,
+                    'year'          => $year,
+                ],
+                [
+                    'entitled_days' => $entitledDays,
+                ]
+            );
+
+            $summary[] = [
+                'leave_type_id'   => $leaveType->id,
+                'leave_type_name' => $leaveType->name,
+                'leave_type_code' => $leaveType->code,
+                'entitled_days'   => $entitledDays,
+            ];
         }
 
-    $staff = User::where('id', $id)
-        ->where('organization_id', $user->organization_id)
-        ->where('user_type', 'employee')
-        ->firstOrFail();
+        if (empty($summary)) {
+            return response()->json([
+                'message' => 'No valid leave types found. Please check the leave_type_ids.',
+            ], 422);
+        }
 
-    $year    = now()->year;
-    $summary = [];
-
-    // Load all requested leave types in one query instead of one per loop
-    $leaveTypeIds = collect($request->leave_types)->pluck('leave_type_id');
-
-    $leaveTypes = LeaveType::whereIn('id', $leaveTypeIds)
-        ->where('organization_id',  $user->organization_id)
-        ->get()
-        ->keyBy('id'); // key by ID so we can access them directly
-
-    foreach ($request->leave_types as $entry) {
-        $leaveType = $leaveTypes->get($entry['leave_type_id']);
-
-        // Skip silently if leave type not found or belongs to another org
-        if (!$leaveType) continue;
-         $entitledDays = $leaveType->days_per_year ?? 0;
-
-
-        UserLeaveEntitlement::updateOrCreate(
-            [
-                'user_id'       => $staff->id,
-                'leave_type_id' => $leaveType->id,
-                'year'          => $year,
+        return response()->json([
+            'message'  => 'Leave entitlements assigned.',
+            'data' => [
+                'staff_id' => $staff->id,
+                'year'     => $year,
+                'assigned' => $summary,
             ],
-            [
-                'entitled_days' => $entitledDays,
-            ]
-        );
-
-        $summary[] = [
-            'leave_type_id'   => $leaveType->id,
-            'leave_type_name' => $leaveType->name,
-            'leave_type_code' => $leaveType->code,
-            'entitled_days'   => $entitledDays,
-        ];
+        ]);
     }
 
-    if (empty($summary)) {
+    public function deassignLeave(DeassignLeaveRequest $request, int $id): JsonResponse
+    {
+            $user = $request->user();
+            if( !$user->canDo('manage_users')){
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
+
+        $staff = User::where('id', $id)
+            ->where('organization_id',  $user->organization_id)
+            ->where('user_type', 'employee')
+            ->firstOrFail();
+
+        $year         = $request->integer('year', now()->year);
+        $leaveTypeIds = $request->leave_type_ids;
+
+        // Load matching entitlements for this staff in one query
+        $entitlements = UserLeaveEntitlement::where('user_id', $staff->id)
+            ->where('year', $year)
+            ->whereIn('leave_type_id', $leaveTypeIds)
+            ->get();
+
+        if ($entitlements->isEmpty()) {
+            return response()->json([
+                'message' => 'No matching leave entitlements found for this staff member.',
+            ], 422);
+        }
+
+        // Load leave type names for the response summary
+        $leaveTypes = LeaveType::whereIn('id', $entitlements->pluck('leave_type_id'))
+            ->get()
+            ->keyBy('id');
+
+        $removed = [];
+
+        foreach ($entitlements as $entitlement) {
+            $leaveType = $leaveTypes->get($entitlement->leave_type_id);
+            $removed[] = [
+                'leave_type_id'   => $entitlement->leave_type_id,
+                'leave_type_name' => $leaveType?->name,
+                'leave_type_code' => $leaveType?->code,
+                'year'            => $year,
+            ];
+            $entitlement->delete();
+        }
+
         return response()->json([
-            'message' => 'No valid leave types found. Please check the leave_type_ids.',
-        ], 422);
-    }
-
-    return response()->json([
-        'message'  => 'Leave entitlements assigned.',
-        'data' => [
+            'message'  => 'Leave entitlements removed.',
+            "data" => [
             'staff_id' => $staff->id,
             'year'     => $year,
-            'assigned' => $summary,
-        ],
-    ]);
-}
-public function deassignLeave(DeassignLeaveRequest $request, int $id): JsonResponse
-{
-        $user = $request->user();
-        if( !$user->canDo('manage_users')){
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
-
-    $staff = User::where('id', $id)
-        ->where('organization_id',  $user->organization_id)
-        ->where('user_type', 'employee')
-        ->firstOrFail();
-
-    $year         = $request->integer('year', now()->year);
-    $leaveTypeIds = $request->leave_type_ids;
-
-    // Load matching entitlements for this staff in one query
-    $entitlements = UserLeaveEntitlement::where('user_id', $staff->id)
-        ->where('year', $year)
-        ->whereIn('leave_type_id', $leaveTypeIds)
-        ->get();
-
-    if ($entitlements->isEmpty()) {
-        return response()->json([
-            'message' => 'No matching leave entitlements found for this staff member.',
-        ], 422);
+            'removed'  => $removed,
+        ]]);
     }
 
-    // Load leave type names for the response summary
-    $leaveTypes = LeaveType::whereIn('id', $entitlements->pluck('leave_type_id'))
-        ->get()
-        ->keyBy('id');
 
-    $removed = [];
-
-    foreach ($entitlements as $entitlement) {
-        $leaveType = $leaveTypes->get($entitlement->leave_type_id);
-        $removed[] = [
-            'leave_type_id'   => $entitlement->leave_type_id,
-            'leave_type_name' => $leaveType?->name,
-            'leave_type_code' => $leaveType?->code,
-            'year'            => $year,
-        ];
-        $entitlement->delete();
     }
-
-    return response()->json([
-        'message'  => 'Leave entitlements removed.',
-        "data" => [
-        'staff_id' => $staff->id,
-        'year'     => $year,
-        'removed'  => $removed,
-    ]]);
-}
-
-
-}

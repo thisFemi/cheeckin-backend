@@ -59,10 +59,12 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::apiResource('staff', StaffController::class);                                                         //Done
         //Route::post('register/staff', [AuthController::class,'registerEmployee']);   //Done
         Route::post('staff/{id}/assign-policy',  [StaffController::class,'assignPolicy']);                           //Done
-         Route::post('staff/{id}/deassign-policy',  [StaffController::class,'deassignPolicy']);                      //Done     
+        Route::post('staff/{id}/deassign-policy',  [StaffController::class,'deassignPolicy']);                       //Done     
         Route::post('staff/{id}/assign-leave',   [StaffController::class,'assignLeave']);                            //Done
         Route::post('staff/{id}/deassign-leave',   [StaffController::class,'deassignLeave']);                        //Done   
 
+
+//Yet to be tested
         Route::get('attendance',              [AdminAttendanceController::class,'index']);
         Route::get('attendance/summary',      [AdminAttendanceController::class,'summary']);
         Route::get('attendance/{id}',         [AdminAttendanceController::class,'show']);

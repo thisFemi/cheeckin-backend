@@ -54,34 +54,18 @@ public function index(Request $request): JsonResponse
         'slug' => $slug,
          ]);
 
-      if ($request->filled('permissions')) {
+        if ($request->filled('permissions')) {
+        $permissionIds = Permission::whereIn('slug', $request->permissions)
+            ->pluck('id')
+            ->mapWithKeys(fn($id) => [$id => ['allowed' => true]]);
 
-    // Get only permissions where value = true
-    $allowedSlugs = collect($request->permissions)
-        ->filter(fn ($value) => $value) // keeps only true
-        ->keys()
-        ->toArray();
+        $role->permissions()->sync($permissionIds);
+    }
 
-    // Fetch matching permission records
-    $permissions = Permission::whereIn('slug', $allowedSlugs)->get();
-
-   $syncData = $permissions->mapWithKeys(function ($permission) {
-        return [
-            $permission->id => ['allowed' => true]
-        ];
-    })->toArray();
-
-    // Sync only allowed permissions
-    $role->permissions()->sync($syncData);
-}
-
-        return response()->json([
-            'message' => 'Role created.',
-                  'data' => [
-            'role' => new RoleResource($role),
-        ],
-           
-        ]);
+    return response()->json([
+        'message' => 'Role created.',
+        'role'    => new RoleResource($role->load('permissions')),
+    ], 201);
     }
 
     // public function showTest(Request $request): JsonResponse
@@ -133,18 +117,13 @@ public function index(Request $request): JsonResponse
             'slug' => $slug,
         ]);
 
-           if ($request->filled('permissions')) {
+        if ($request->filled('permissions')) {
+        $permissionIds = Permission::whereIn('slug', $request->permissions)
+            ->pluck('id')
+            ->mapWithKeys(fn($id) => [$id => ['allowed' => true]]);
 
-            $allowedSlugs = collect($request->permissions)
-                ->filter(fn ($value) => $value) // only true
-                ->keys()
-                ->toArray();
-
-            $permissions = Permission::whereIn('slug', $allowedSlugs)->get();
-
-            // Sync only allowed ones (others removed)
-            $role->permissions()->sync($permissions->pluck('id')->toArray());
-        }
+        $role->permissions()->sync($permissionIds);
+    }
 
 
         return response()->json([

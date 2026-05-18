@@ -1,4 +1,7 @@
 <?php
+namespace App\Services;
+use App\Models\User;
+use Illuminate\Support\Facades\Storage;
 // app/Services/FaceVerificationService.php
 //
 // This service is intentionally designed as an interface boundary.

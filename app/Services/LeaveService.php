@@ -1,4 +1,5 @@
 <?php
+namespace App\Services;
 
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;

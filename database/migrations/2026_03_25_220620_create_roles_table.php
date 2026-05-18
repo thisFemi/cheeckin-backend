@@ -21,25 +21,8 @@ return new class extends Migration
         });
 
 
-        Schema::create('permissions', function (Blueprint $table) {
-    $table->id();
-    $table->string('name'); // Create User
-    $table->string('slug')->unique(); // create_user
-
-    $table->timestamps();
-});
 
 
-Schema::create('role_permission', function (Blueprint $table) {
-    $table->id();
-
-    $table->foreignId('role_id')->constrained()->cascadeOnDelete();
-    $table->foreignId('permission_id')->constrained()->cascadeOnDelete();
-
-    $table->boolean('allowed')->default(true);
-
-    $table->unique(['role_id', 'permission_id']);
-});
     }
 
     
@@ -50,7 +33,5 @@ Schema::create('role_permission', function (Blueprint $table) {
     public function down(): void
     {
         Schema::dropIfExists('roles');
-        Schema::dropIfExists('permissions');
-        Schema::dropIfExists('role_permission');
     }
 };
