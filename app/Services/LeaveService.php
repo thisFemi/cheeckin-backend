@@ -10,6 +10,8 @@ use Carbon\Carbon;
  
 class LeaveService
 {
+
+
     /**
      * How many days has this employee used for a given leave type this year?
      */

@@ -33,13 +33,14 @@ protected $fillable = [
        'organization_id', 'role_id', 'first_name', 'last_name', 'email',
         'password', 'phone', 'avatar', 'face_template', 'requires_face_setup', 'user_type',
         'employment_status', 'employee_id', 'department', 'position', 'joined_date', 'require_password_reset',
-    ];
+        'first_login' ];
 
 protected $hidden = ['password', 'remember_token', 'face_template'];
 
  protected $casts = [
         'email_verified_at' => 'datetime',
         'joined_date'       => 'date',
+        'first_login'        => 'boolean',
         'password'          => 'hashed',
         'require_password_reset' => 'boolean',
     ];
@@ -104,31 +105,31 @@ public function hasPermission(string $slug): bool
 
 public function canDo(string $permission): bool
 {
-    // Owner always allowed
+    // Owners have all permissions — no check needed
     if ($this->isOwner()) {
         return true;
     }
 
-    // Admin always allowed
-    if ($this->isAdmin()) {
-        return true;
+
+     // Employees have no admin permissions
+    if ($this->isEmployee()) {
+        return false;
     }
 
-
-    // No role assigned — no permissions
+    // Admin with no role — no permissions
     if (!$this->role_id) {
         return false;
     }
 
-     if ($this->cachedPermissions === null) {
+    /// Cache permissions to avoid N+1
+    if ($this->cachedPermissions === null) {
         $this->cachedPermissions = $this->role
             ->permissions()
             ->wherePivot('allowed', true)
             ->get();
     }
 
-    // Otherwise check permission
-      return $this->cachedPermissions
+    return $this->cachedPermissions
         ->where('slug', $permission)
         ->isNotEmpty();
 }

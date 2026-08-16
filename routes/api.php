@@ -22,11 +22,12 @@ Route::get('hello', function(){
 //-Public
 Route::prefix('auth')->group(function(){
 
-    Route::post('register/owner',    [AuthController::class,'registerOwner']);                                     //Done
-    Route::post('login',             [AuthController::class,'login']);                                             //Done
-    Route::post('forgot-password',   [AuthController::class,'forgotPassword']);                                    //Done
-    Route::post('reset-password',    [AuthController::class,'resetPassword']);                                     //Done
-    });
+    Route::post('register/owner',    [AuthController::class,'registerOwner']);                                      //Done
+    Route::post('login',             [AuthController::class,'login']);                                              //Done
+    Route::post('forgot-password',   [AuthController::class,'forgotPassword']);                                     //Done
+    Route::post('reset-password',    [AuthController::class,'resetPassword']);                                      //Done
+    Route::post('first-login-reset', [AuthController::class,'firstLoginReset']);                                    //Done
+   });
 
 
 //-Authenticated
@@ -36,32 +37,36 @@ Route::middleware('auth:sanctum')->group(function(){
 //-Owner    
 
     Route::middleware('owner')->prefix('owner')->group(function(){
-        Route::get('organization',      [OrganizationController::class, 'show'] );                                   //Done   
-        Route::put('organization',      [OrganizationController::class,'update']);                                   //Done
-        Route::get('organization/code', [OrganizationController::class,'orgCode']);                                  //Done
-        Route::post('organization/regenerate-code', [OrganizationController::class,'regenerateOrgCode']);            //Done
-
-        
-        Route::apiResource('admins', AdminController::class);                                                        //Done
+        Route::get('organization',                  [OrganizationController::class, 'show'] );                      //Done   
+        Route::put('organization',                  [OrganizationController::class,'update']);                      //Done
+        Route::get('organization/code',             [OrganizationController::class,'orgCode']);                     //Done
+        Route::post('organization/regenerate-code', [OrganizationController::class,'regenerateOrgCode']);           //Done
+        Route::apiResource('admins',                AdminController::class);                                        //Done
+         Route::apiResource('roles',                  RoleController::class);                                      //Done
                                                      
+    // Assign/deassign role to employee
+    Route::post('staff/{id}/assign-role',   [RoleController::class, 'assignRole']);
+    Route::delete('staff/{id}/deassign-role', [RoleController::class, 'deassignRole']);
+
+    // List all permissions (for role creation form)
+    Route::get('permissions', [RoleController::class, 'permissions']);
 
         });
 
 
 //-Admin
 
-    Route::middleware('admin')->prefix('admin')->group(function(){
-       //   Route::post('roles',  [RoleController::class, 'showTest']);  
-        Route::apiResource('roles',  RoleController::class);                                                         //Done                                             
-        Route::apiResource('attendance-policies',    AttendancePolicyController::class);                             //Done
-        Route::apiResource('leave-types',            LeaveTypeController::class);                                    //Done
+    Route::middleware('admin')->prefix('admin')->group(function(){  
+                                              //Done                                             
+        Route::apiResource('attendance-policies',    AttendancePolicyController::class);                            //Done
+        Route::apiResource('leave-types',            LeaveTypeController::class);                                   //Done
 
-        Route::apiResource('staff', StaffController::class);                                                         //Done
+        Route::apiResource('staff', StaffController::class);                                                        //Done
         //Route::post('register/staff', [AuthController::class,'registerEmployee']);   //Done
-        Route::post('staff/{id}/assign-policy',  [StaffController::class,'assignPolicy']);                           //Done
-        Route::post('staff/{id}/deassign-policy',  [StaffController::class,'deassignPolicy']);                       //Done     
-        Route::post('staff/{id}/assign-leave',   [StaffController::class,'assignLeave']);                            //Done
-        Route::post('staff/{id}/deassign-leave',   [StaffController::class,'deassignLeave']);                        //Done   
+        Route::post('staff/{id}/assign-policy',  [StaffController::class,'assignPolicy']);                          //Done
+        Route::post('staff/{id}/deassign-policy',  [StaffController::class,'deassignPolicy']);                      //Done     
+        Route::post('staff/{id}/assign-leave',   [StaffController::class,'assignLeave']);                           //Done
+        Route::post('staff/{id}/deassign-leave',   [StaffController::class,'deassignLeave']);                       //Done   
 
 
 //Yet to be tested

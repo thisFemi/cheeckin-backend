@@ -83,6 +83,7 @@ class StaffController extends Controller
             'user_type'         => 'employee',
             'face_template'     => null,    // Always null — set by employee on first login
             'employment_status' => 'active',
+            'first_login'            => true,
             'requires_face_setup' => $request->requires_face_setup??true, 
             'require_password_reset' =>true,
             

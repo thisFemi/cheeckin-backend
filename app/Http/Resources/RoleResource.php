@@ -12,16 +12,25 @@ class RoleResource extends JsonResource
      *
      * @return array<string, mixed>
      */
-    public function toArray(Request $request): array
+   public function toArray(Request $request): array
     {
-        return  [
+        return [
             'id'          => $this->id,
             'name'        => $this->name,
             'slug'        => $this->slug,
-            'permissions' => $this->permissions ?? [],
             'users_count' => $this->when(
                 isset($this->users_count),
                 $this->users_count
+            ),
+            'permissions' => $this->when(
+                $this->relationLoaded('permissions'),
+                fn() => $this->permissions->map(fn($p) => [
+                    'id'      => $p->id,
+                    'name'    => $p->name,
+                    'slug'    => $p->slug,
+                    'group'   => $p->group,
+                    'allowed' => $p->pivot->allowed,
+                ])
             ),
             'created_at'  => $this->created_at->toIso8601String(),
         ];

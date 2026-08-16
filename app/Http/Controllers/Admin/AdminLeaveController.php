@@ -8,13 +8,17 @@ use App\Http\Resources\LeaveRequestResource;
 use App\Models\AttendanceRecord;
 use App\Models\LeaveRequest;
 use App\Notifications\LeaveStatusNotification;
+use App\Services\LeaveService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\JsonResource;
+
 
 class AdminLeaveController extends Controller
 {
+     public function __construct(
+        private LeaveService $leaveService
+    ) {}
     
 public function index(Request $request): JsonResponse
     {
@@ -28,10 +32,30 @@ public function index(Request $request): JsonResponse
         if ($request->filled('month'))   $query->whereMonth('start_date', $request->month);
         if ($request->filled('year'))    $query->whereYear('start_date', $request->year);
 
+         $leaveRequests = $query->paginate(20);
+
+          $data = $leaveRequests->through(function ($leaveRequest) {
+        $year      = $leaveRequest->start_date->year;
+        $employee  = $leaveRequest->user;
+        $leaveType = $leaveRequest->leaveType;
+
+        $remaining = $this->leaveService->remainingDays($employee, $leaveType, $year);
+
+         $leaveRequest->employee_balance = [
+            'entitled_days'       => $this->leaveService->entitledDays($employee, $leaveType, $year),
+            'used_days'           => $this->leaveService->usedDays($employee->id, $leaveType->id, $year),
+            'remaining_days'      => $remaining,
+            'will_exceed_balance' => $leaveRequest->total_days > $remaining,
+        ];
+
+        return $leaveRequest;
+    });
+
+
         return response()->json([
             'message' => 'Leave requests retrieved successfully',
             'data' => [
-                'leave_requests' => LeaveRequestResource::collection($query->paginate(20)),
+                'leave_requests' => $data,
             ],
         ]);
     }
@@ -42,11 +66,31 @@ public function index(Request $request): JsonResponse
             ->where('organization_id', $request->user()->organization_id)
             ->with(['user', 'leaveType', 'approvedBy'])
             ->firstOrFail();
+            
+        $year      = $leaveRequest->start_date->year;
+        $employee  = $leaveRequest->user;
+        $leaveType = $leaveRequest->leaveType;
+
+        $entitledDays  = $this->leaveService->entitledDays($employee, $leaveType, $year);
+        $usedDays      = $this->leaveService->usedDays($employee->id, $leaveType->id, $year);
+        $remainingDays = $this->leaveService->remainingDays($employee, $leaveType, $year);
+
+        
 
         return response()->json([
             'message' => 'Leave request retrieved successfully',
             'data' => [
                 'leave_request' => new LeaveRequestResource($leaveRequest),
+            'employee_balance' => [
+            'leave_type'     => $leaveType->name,
+            'year'           => $year,
+            'entitled_days'  => $entitledDays,
+            'used_days'      => $usedDays,
+            'remaining_days' => $remainingDays,
+            'requested_days' => $leaveRequest->total_days,
+            // Will approving this leave exceed their balance?
+            'will_exceed_balance' => $leaveRequest->total_days > $remainingDays,
+        ],
             ],
         ]);
     }

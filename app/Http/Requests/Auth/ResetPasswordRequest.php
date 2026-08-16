@@ -23,9 +23,16 @@ class ResetPasswordRequest extends FormRequest
     public function rules(): array
     {
         return  [
-            'code'    => ['required', 'string'],
-            'email'    => ['required', 'email'],
+            'email'    => ['required', 'email', 'exists:users,email'],
+            'code'     => ['required', 'string'],
             'password' => ['required', 'string', 'min:8'],
+        ];
+    }
+
+     public function messages(): array
+    {
+        return [
+            'email.exists' => 'No account found with this email address.',
         ];
     }
 }
