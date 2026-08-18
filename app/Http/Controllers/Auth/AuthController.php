@@ -41,6 +41,7 @@ class AuthController extends Controller
             'address' => $request->organization_address,
             'org_code' => $orgCode,
         ]);
+    $this->orgCodeService->setupDefaultRoles($organization);
 
         $owner = User::create([
             'organization_id' => $organization->id,
@@ -50,8 +51,8 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
             'phone' => $request->phone,
             'user_type' => 'owner',
-            'require_password_reset' => true,
-            'first_login' => true,
+            'require_password_reset' => false,
+            'first_login' => false,
         ]);
 
         $token = $owner->createToken('auth_token')->plainTextToken;

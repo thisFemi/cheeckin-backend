@@ -1,6 +1,8 @@
 <?php
 namespace App\Services;
 use App\Models\Organization;
+use App\Models\Permission;
+use App\Models\Role;
 // app/Services/OrgCodeService.php
 class OrgCodeService
 {
@@ -18,4 +20,23 @@ class OrgCodeService
 
         return  $code;
     }
+
+    // app/Services/OrgCodeService.php — or create a new OrgSetupService
+
+public function setupDefaultRoles(Organization $organization): Role
+{
+    // Create Super Admin role with all permissions
+    $superAdmin = Role::create([
+        'organization_id' => $organization->id,
+        'name'            => 'Super Admin',
+        'slug'            => 'super-admin',
+    ]);
+
+    $allPermissions = Permission::pluck('id')
+        ->mapWithKeys(fn($id) => [$id => ['allowed' => true]]);
+
+    $superAdmin->permissions()->sync($allPermissions);
+
+    return $superAdmin;
+}
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Http\Controllers\Concerns\ChecksPermissions;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\CreateAttendancePolicyRequest;
 use App\Http\Requests\Admin\UpdateAttendancePolicyRequest;
@@ -10,18 +11,21 @@ use App\Models\AttendancePolicy;
 use App\Models\UserAttendancePolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-
+use App\Enums\Permission;
 class AttendancePolicyController extends Controller
 {
+    use ChecksPermissions;
     /**
      * Display a listing of the resource.
      */
      public function index(Request $request): JsonResponse
     {
         $user=$request->user();
-        if( !$user->canDo('manage_policies')){
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+
+        if ($error = $this->requirePermission($request, Permission::MANAGE_POLICIES)) return $error;
+
+        
+        
         $policies = AttendancePolicy::where('organization_id',   $user->organization_id)
             ->latest()
             ->get();
@@ -42,9 +46,9 @@ class AttendancePolicyController extends Controller
     public function store(CreateAttendancePolicyRequest $request)
     {
          $user=$request->user();
-        if( !$user->canDo('manage_policies')){
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+      if ($error = $this->requirePermission($request, Permission::MANAGE_POLICIES)) return $error;
+
+        
 
        $policy = AttendancePolicy::create([
             ...$request->validated(),
@@ -63,9 +67,9 @@ class AttendancePolicyController extends Controller
     public function show(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        if( !$user->canDo('manage_policies')){
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+       if ($error = $this->requirePermission($request, Permission::MANAGE_POLICIES)) return $error;
+
+        
         $policy = AttendancePolicy::where('id', $id)
             ->where('organization_id',   $user->organization_id)
             ->firstOrFail();
@@ -80,9 +84,8 @@ class AttendancePolicyController extends Controller
   public function update(UpdateAttendancePolicyRequest $request, int $id): JsonResponse
     {
         $user = $request->user();
-        if( !$user->canDo('manage_policies')){
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        if ($error = $this->requirePermission($request, Permission::MANAGE_POLICIES)) return $error;
+
         $policy = AttendancePolicy::where('id', $id)
             ->where('organization_id',   $user->organization_id)
             ->firstOrFail();
@@ -99,10 +102,7 @@ class AttendancePolicyController extends Controller
     
   public function destroy(Request $request, int $id): JsonResponse
     {
-        $user = $request->user();
-        if( !$user->canDo('manage_policies')){
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        if ($error = $this->requirePermission($request, Permission::MANAGE_POLICIES)) return $error;
 
         $policy = AttendancePolicy::where('id', $id)
             ->where('organization_id', $request->user()->organization_id)

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Employee;
 
+use App\Http\Controllers\Concerns\ChecksPermissions;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Employee\CheckInRequest;
 use App\Http\Requests\Employee\CheckOutRequest;
@@ -13,10 +14,11 @@ use App\Services\AttendanceService;
 use App\Services\FaceVerificationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
-
+use App\Enums\Permission;
 
 class EmployeeAttendanceController extends Controller
 {
+    use ChecksPermissions;
      public function __construct(
         private AttendanceService      $attendanceService,
         private FaceVerificationService $faceService,
@@ -24,9 +26,9 @@ class EmployeeAttendanceController extends Controller
 
     public function checkIn(CheckInRequest $request): JsonResponse{
         $user = $request->user();
-        if( !$user->canDo('check_in_out')){
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        if ($error = $this->requirePermission($request, Permission::CHECK_IN_OUT)) return $error;
+
+       
         $today  = now()->toDateString();
         $policy = $user->attendancePolicy;
           if (AttendanceRecord::where('user_id', $user->id)->where('date', $today)->whereNotNull('check_in_at')->exists()) {
@@ -79,9 +81,7 @@ class EmployeeAttendanceController extends Controller
     }
     public function checkOut(CheckOutRequest $request):JsonResponse{
         $user = $request->user();
-        if( !$user->canDo('check_in_out')){
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        if ($error = $this->requirePermission($request, Permission::CHECK_IN_OUT)) return $error;
 
          $record = AttendanceRecord::where('user_id', $user->id)
             ->where('date', now()->toDateString())

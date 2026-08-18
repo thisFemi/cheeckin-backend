@@ -4,6 +4,7 @@ namespace App\Http\Requests\Owner;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CreateAdminRequest extends FormRequest
 {
@@ -23,16 +24,19 @@ class CreateAdminRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'first_name' => ['required', 'string', 'max:100'],
-            'last_name'  => ['required', 'string', 'max:100'],
-            'email'      => ['required', 'email', 'unique:users,email'],
-            'password'   => ['required', 'string', 'min:8' ],
-            'phone'      => ['nullable', 'string', 'max:20'],
-            'org_code'   => ['required', 'string', 'exists:organizations,org_code'],
-            'department'   => ['nullable', 'string', 'max:100'],
-            'employee_id'  => ['required', 'string', 'max:50'],
-            'joined_date'  => ['nullable', 'date'],
-            'position'     => ['nullable', 'string', 'max:100'],
-        ];
+        'first_name' => ['required', 'string', 'max:100'],
+        'last_name'  => ['required', 'string', 'max:100'],
+        'email'      => ['required', 'email', 'unique:users,email'],
+        'phone'      => ['nullable', 'string', 'max:20'],
+        'department' => ['nullable', 'string', 'max:100'],
+        'position'   => ['nullable', 'string', 'max:100'],
+        'role_id'    => [
+            'nullable',
+            'integer',
+            // Role must belong to this organization
+            Rule::exists('roles', 'id')
+                ->where('organization_id', $this->user()->organization_id),
+        ],
+    ];
     }
 }

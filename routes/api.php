@@ -42,7 +42,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('organization/code',             [OrganizationController::class,'orgCode']);                     //Done
         Route::post('organization/regenerate-code', [OrganizationController::class,'regenerateOrgCode']);           //Done
         Route::apiResource('admins',                AdminController::class);                                        //Done
-         Route::apiResource('roles',                  RoleController::class);                                      //Done
+         Route::apiResource('roles',                  RoleController::class);                                       //Not yet tested
                                                      
     // Assign/deassign role to employee
     Route::post('staff/{id}/assign-role',   [RoleController::class, 'assignRole']);

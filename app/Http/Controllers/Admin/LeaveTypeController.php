@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\Permission;
+use App\Http\Controllers\Concerns\ChecksPermissions;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\CreateLeaveTypeRequest;
 use App\Http\Requests\Admin\UpdateLeaveTypeRequest;
@@ -13,23 +15,25 @@ use Illuminate\Http\Request;
 
 class LeaveTypeController extends Controller
 {
-   
-       public function index(Request $request): JsonResponse
+    use ChecksPermissions;
+
+    public function index(Request $request): JsonResponse
     {
         $types = LeaveType::where('organization_id', $request->user()->organization_id)
             ->latest()
             ->get();
 
         return response()->json([
-        'message' => 'Leave types retrieved successfully',
-         'data' => [
-        'leave_types' => LeaveTypeResource::collection($types)]]);
+            'message' => 'Leave types retrieved successfully',
+            'data' => [
+                'leave_types' => LeaveTypeResource::collection($types)]]);
     }
 
-    public function store(CreateLeaveTypeRequest  $request): JsonResponse{
-          $user = $request->user();
-        if( !$user->canDo('manage_leave')){
-            return response()->json(['message' => 'Forbidden'], 403);
+    public function store(CreateLeaveTypeRequest $request): JsonResponse
+    {
+
+        if ($error = $this->requirePermission($request, Permission::MANAGE_LEAVE)) {
+            return $error;
         }
 
         $leaveType = LeaveType::create([
@@ -38,29 +42,28 @@ class LeaveTypeController extends Controller
         ]);
 
         return response()->json([
-            'message'    => 'Leave type created.',
+            'message' => 'Leave type created.',
             'data' => [
-            'leave_type' => new LeaveTypeResource($leaveType),]
+                'leave_type' => new LeaveTypeResource($leaveType), ],
         ]);
     }
 
-      public function show(Request $request, int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
-        
+
         $leaveType = LeaveType::where('id', $id)
             ->where('organization_id', $request->user()->organization_id)
             ->firstOrFail();
 
         return response()->json(['leave_type' => new LeaveTypeResource($leaveType)]);
     }
- public function update(UpdateLeaveTypeRequest $request, int $id): JsonResponse
- 
-    {  $user = $request->user();
-        if( !$user->canDo('manage_leave')){
-            return response()->json(['message' => 'Forbidden'], 403);
+
+    public function update(UpdateLeaveTypeRequest $request, int $id): JsonResponse
+    {
+        if ($error = $this->requirePermission($request, Permission::MANAGE_LEAVE)) {
+            return $error;
         }
 
-       
         $leaveType = LeaveType::where('id', $id)
             ->where('organization_id', $request->user()->organization_id)
             ->firstOrFail();
@@ -68,17 +71,18 @@ class LeaveTypeController extends Controller
         $leaveType->update($request->validated());
 
         return response()->json([
-            'message'    => 'Leave type updated.',
+            'message' => 'Leave type updated.',
             'data' => [
                 'leave_type' => new LeaveTypeResource($leaveType->fresh()),
-            ]
+            ],
         ]);
     }
+
     public function destroy(Request $request, int $id): JsonResponse
     {
-          $user = $request->user();
-        if( !$user->canDo('manage_leave')){
-            return response()->json(['message' => 'Forbidden'], 403);
+
+        if ($error = $this->requirePermission($request, Permission::MANAGE_LEAVE)) {
+            return $error;
         }
 
         $leaveType = LeaveType::where('id', $id)
@@ -96,5 +100,4 @@ class LeaveTypeController extends Controller
 
         return response()->json(['message' => 'Leave type deleted.']);
     }
-
 }

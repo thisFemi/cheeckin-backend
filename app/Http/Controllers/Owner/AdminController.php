@@ -6,13 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Owner\CreateAdminRequest;
 use App\Http\Requests\Owner\UpdateAdminRequest;
 use App\Http\Resources\UserResource;
+use App\Models\Organization;
+use App\Models\Role;
 use App\Models\User;
-
 use App\Notifications\StaffWelcomeNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class AdminController extends Controller
 {
@@ -28,41 +31,43 @@ class AdminController extends Controller
             'message' => 'Admins retrieved successfully',
             'data' => [
                 'admins' => UserResource::collection($admins),
-    
-                ]]);
+
+            ]]);
     }
 
-    public function store(CreateAdminRequest $request): JsonResponse{
+    public function store(CreateAdminRequest $request): JsonResponse
+    {
         $owner = $request->user();
         $tempPassword = Str::random(10);
 
         $admin = User::create([
-              'organization_id'   => $owner->organization_id,
-            'first_name'        => $request->first_name,
-            'last_name'         => $request->last_name,
-            'email'             => $request->email,
-            'password'          => Hash::make($tempPassword),
-            'phone'             => $request->phone,
-            'department'        => $request->department,
-            'position'          => $request->position,
-            'role_id'           => $request->role_id,
-            'employee_id'       => $request->employee_id,
-            'joined_date'       => $request->joined_date,
-            'user_type'         => 'admin',           // hardcoded — cannot be changed by request
+            'organization_id' => $owner->organization_id,
+            'first_name' => $request->first_name,
+            'last_name' => $request->last_name,
+            'email' => $request->email,
+            'password' => Hash::make($tempPassword),
+            'phone' => $request->phone,
+            'department' => $request->department,
+            'position' => $request->position,
+            'role_id' => $request->role_id, // 👈 assign role at creation
+            'user_type' => 'admin',
             'employment_status' => 'active',
-            'face_template'     => null,
+            'face_template' => null,
+            'require_password_reset' => true,
+            'first_login' => true,
         ]);
 
-         // Send welcome email with temp password
-        $admin->notify(new StaffWelcomeNotification($owner->organization, $tempPassword));
+        // Send welcome email with temp password
+         $organization = Organization::find($owner->organization_id);
+        $admin->notify(new StaffWelcomeNotification($organization, $tempPassword));
 
         return response()->json([
-            'message' => 'Admin created successfully',
+            'message' => 'Admin account created. Welcome email sent.',
             'data' => [
                 'admin' => new UserResource($admin->load('role')),
-                ]]);
-    
-        }
+            ]]);
+
+    }
 
     public function show(Request $request, int $id): JsonResponse
     {
@@ -73,30 +78,83 @@ class AdminController extends Controller
             ->firstOrFail();
 
         return response()->json([
-             'message' => 'Admin retrieved successfully',
+            'message' => 'Admin retrieved successfully',
             'data' => [
-                 'admin' => new UserResource($admin),
-                ]]);
-         
-        
+                'admin' => new UserResource($admin),
+            ]]);
+
     }
 
-    public function update(UpdateAdminRequest $request, int $id): JsonResponse
+    // POST /api/owner/admins/{id}/assign-role
+    public function assignRole(Request $request, int $id): JsonResponse
+    {
+
+        $validator = Validator::make($request->all(), [
+            'role_id' => [
+                'required',
+                'integer',
+                Rule::exists('roles', 'id')
+                    ->where('organization_id', $request->user()->organization_id),
+            ],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $admin = User::where('id', $id)
+            ->where('organization_id', $request->user()->organization_id)
+            ->where('user_type', 'admin')
+            ->firstOrFail();
+
+        if ($admin->role_id === $request->role_id) {
+            return response()->json([
+                'message' => 'This admin is already assigned to this role.',
+            ], 422);
+        }
+        $previousRole = $admin->role?->name;
+        $admin->update(['role_id' => $request->role_id]);
+        $newRole = Role::with('permissions')->find($request->role_id);
+
+        return response()->json([
+            'message' => "Role assigned to {$admin->first_name} {$admin->last_name}.",
+            'data' => [
+                'previous_role' => $previousRole ?? 'None',
+                'new_role' => [
+                    'id' => $newRole->id,
+                    'name' => $newRole->name,
+                    'permissions' => $newRole->permissions
+                        ->where('pivot.allowed', true)
+                        ->pluck('slug'),
+                ],
+            ],
+        ]);
+
+    }
+
+    // DELETE /api/owner/admins/{id}/deassign-role
+    public function deassignRole(Request $request, int $id): JsonResponse
     {
         $admin = User::where('id', $id)
             ->where('organization_id', $request->user()->organization_id)
             ->where('user_type', 'admin')
             ->firstOrFail();
-            
 
-        $admin->update($request->validated());
+        if (! $admin->role_id) {
+            return response()->json([
+                'message' => 'This admin has no role assigned.',
+            ], 422);
+        }
+
+        $previousRole = $admin->role->name;
+        $admin->update(['role_id' => null]);
 
         return response()->json([
-            'message' => 'Admin updated successfully.',
-            'data' => [
-                 'admin' => new UserResource($admin->fresh('role')),
-                ]]);
-           
+            'message' => "Role '{$previousRole}' removed from {$admin->first_name} {$admin->last_name}.",
+        ]);
     }
 
     public function destroy(Request $request, int $id): JsonResponse
@@ -124,5 +182,4 @@ class AdminController extends Controller
             'message' => 'Admin account removed.',
         ]);
     }
-    
 }

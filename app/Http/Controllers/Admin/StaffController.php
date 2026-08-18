@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Http\Controllers\Concerns\ChecksPermissions;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AssignLeaveRequest;
 use App\Http\Requests\Admin\AssignPolicyRequest;
@@ -22,9 +23,12 @@ use Hash;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use App\Enums\Permission;
 
 class StaffController extends Controller
 {
+
+use ChecksPermissions;
      public function index(Request $request): JsonResponse
     {
         $query = User::where('organization_id', $request->user()->organization_id)
@@ -61,9 +65,9 @@ class StaffController extends Controller
     {
       // dd($request->all(), $request->getContent());
            $user = $request->user();
-        if( !$user->canDo('manage_users')){
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+           if ($error = $this->requirePermission($request, Permission::MANAGE_STAFF)) return $error;
+
+       
       
         // Generate a temporary password
         $tempPassword = Str::random(10);
@@ -139,10 +143,10 @@ class StaffController extends Controller
 
      public function update(UpdateStaffRequest $request, int $id): JsonResponse
     {
-              $user = $request->user();
-        if( !$user->canDo('manage_users')){
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+             
+         if ($error = $this->requirePermission($request, Permission::MANAGE_STAFF)) return $error;
+
+       
       
         $staff = User::where('id', $id)
             ->where('organization_id', $request->user()->organization_id)
@@ -159,10 +163,10 @@ class StaffController extends Controller
     }
      public function destroy(Request $request, int $id): JsonResponse
     {
-              $user = $request->user();
-        if( !$user->canDo('manage_users')){
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+             
+        if ($error = $this->requirePermission($request, Permission::MANAGE_STAFF)) return $error;
+
+       
       
         $staff = User::where('id', $id)
             ->where('organization_id', $request->user()->organization_id)
@@ -178,9 +182,9 @@ class StaffController extends Controller
     }
     public function assignRole(Request $request, int $id): JsonResponse{
    $user = $request->user();
-       if (!$user->canDo('manage_staff')) {
-        return response()->json(['message' => 'Forbidden. You do not have permission to manage staff.'], 403);
-    }
+       if ($error = $this->requirePermission($request, Permission::MANAGE_STAFF)) return $error;
+
+       
          $staff = User::where('id', $id)
             ->where('organization_id', $user->organization_id)
             ->where('user_type', 'employee')
@@ -209,10 +213,8 @@ class StaffController extends Controller
      public function assignPolicy(AssignPolicyRequest $request, int $id): JsonResponse
     {
               $user = $request->user();
-        if( !$user->canDo('manage_users')){
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
-      
+        if ($error = $this->requirePermission($request, Permission::MANAGE_STAFF)) return $error;
+
         $staff = User::where('id', $id)
             ->where('organization_id', $user->organization_id)
             ->where('user_type', 'employee')
@@ -245,10 +247,10 @@ class StaffController extends Controller
     }
         public function deassignPolicy(Request $request, int $id): JsonResponse
     {
+       
             $user = $request->user();
-            if( !$user->canDo('manage_users')){
-                return response()->json(['message' => 'Forbidden'], 403);
-            }
+            if ($error = $this->requirePermission($request, Permission::MANAGE_STAFF)) return $error;
+
         $staff = User::where('id', $id)
             ->where('organization_id',  $user->organization_id)
             ->where('user_type', 'employee')
@@ -275,9 +277,8 @@ class StaffController extends Controller
     public function assignLeave(AssignLeaveRequest $request, int $id): JsonResponse
     {
             $user = $request->user();
-            if( !$user->canDo('manage_users')){
-                return response()->json(['message' => 'Forbidden'], 403);
-            }
+            if ($error = $this->requirePermission($request, Permission::MANAGE_STAFF)) return $error;
+
 
         $staff = User::where('id', $id)
             ->where('organization_id', $user->organization_id)
@@ -341,9 +342,8 @@ class StaffController extends Controller
     public function deassignLeave(DeassignLeaveRequest $request, int $id): JsonResponse
     {
             $user = $request->user();
-            if( !$user->canDo('manage_users')){
-                return response()->json(['message' => 'Forbidden'], 403);
-            }
+            if ($error = $this->requirePermission($request, Permission::MANAGE_STAFF)) return $error;
+
 
         $staff = User::where('id', $id)
             ->where('organization_id',  $user->organization_id)
